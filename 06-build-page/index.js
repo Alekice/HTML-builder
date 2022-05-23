@@ -8,7 +8,6 @@ const assetsFolder = join(__dirname, 'assets');
 const assetsFolderCopied = join(projectDist, 'assets');
 const componentsFolder = join(__dirname, 'components');
 
-const components = ['header', 'articles', 'footer'];
 
 fs.mkdir(projectDist, { recursive: true }, err => {
   if (err) {
@@ -25,65 +24,94 @@ fs.mkdir(assetsFolderCopied, { recursive: true }, err => {
 const input = fs.createReadStream(join(__dirname, 'template.html'), 'utf-8');
 const output = fs.createWriteStream(join(projectDist, 'index.html'));
 
-input.on('data', chunk => {
+(async function (path) {
 
-  let text = chunk.toString();
-
-  for (let i = 0; i < components.length; i++) {
-    const input = fs.createReadStream(join(componentsFolder, `${components[i]}.html`), 'utf-8');
+  const components = [];
+  try {
+    const files = await readdir(path);
+      
+    for (const file of files) {
+      const fullPath = join(componentsFolder, file);
+      fs.stat(fullPath, (err, stats) => {
+        if (err) {
+          console.error(err);
+          return;
+        }
+        if (stats.isFile()) {
+          components.push(`${file.split('.')[0]}`);
+        }
+      });
+    }
     input.on('data', chunk => {
-      let data = chunk.toString();
-      let replaced = text.replace(`{{${components[i]}}}`, data);
-      text = replaced;
 
-      if (i === components.length - 1) {
-        output.write(text);
+      let text = chunk.toString();
+
+      for (let i = 0; i < components.length; i++) {
+        const input = fs.createReadStream(join(componentsFolder, `${components[i]}.html`), 'utf-8');
+        input.on('data', chunk => {
+          let data = chunk.toString();
+          let replaced = text.replace(`{{${components[i]}}}`, data);
+          text = replaced;
+
+          if (i === components.length - 1) {
+            output.write(text);
+          }
+        });   
       }
-    });   
-  }
-});
+    });
 
+
+    (async function (path) {  
+
+      try {
+        const styleFiles = await readdir(path);
+        const output = fs.createWriteStream(stylesFile);
+            
+        for (const file of styleFiles) {
+          const fullPath = join(__dirname, 'styles', file);
+          fs.stat(fullPath, (err, stats) => {
+            if (err) {
+              console.error(err);
+              return;
+            }
+            if (stats.isFile() && file.split('.')[1] === 'css') {
+              const input = fs.createReadStream(fullPath, 'utf-8');
+              input.on('data', chunk => output.write(chunk));
+            }
+          });
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    })(join(__dirname, 'styles'));
+
+  } catch (err) {
+    console.error(err);
+  }
+})(componentsFolder);
 
 (async function (path) {
 
-  (async function (path) {
+  try {
 
-    try {
+    const dirs = await readdir(path);
 
-      const dirs = await readdir(path);
+    for (const dir of dirs) {
+      fs.mkdir(join(assetsFolderCopied, dir), { recursive: true }, err => {
+        if (err) {
+          console.log(err);
+        }
+      });
 
-      for (const dir of dirs) {
-        fs.mkdir(join(assetsFolderCopied, dir), { recursive: true }, err => {
-          if (err) {
-            console.log(err);
-          }
-        });
+      (async function (path) {
 
         (async function (path) {
-
-          (async function (path) {
-            try {
-
-              const files = await readdir(path);
-              
-              for (const file of files) {
-                fs.unlink(`${join(assetsFolderCopied, dir)}/${file}`, err => {
-                  if (err) {
-                    console.log(err);
-                  }
-                });
-              }
-            } catch (err) {
-              console.error(err);
-            }
-          })(join(assetsFolderCopied, dir));
-
           try {
 
             const files = await readdir(path);
-            
+              
             for (const file of files) {
-              fs.copyFile(`${join(assetsFolder, dir)}/${file}`, `${join(assetsFolderCopied, dir)}/${file}`, err => {
+              fs.unlink(`${join(assetsFolderCopied, dir)}/${file}`, err => {
                 if (err) {
                   console.log(err);
                 }
@@ -92,31 +120,25 @@ input.on('data', chunk => {
           } catch (err) {
             console.error(err);
           }
-        })(join(assetsFolder, dir));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  })(assetsFolder);
+        })(join(assetsFolderCopied, dir));
 
-  try {
-    const styleFiles = await readdir(path);
-    const output = fs.createWriteStream(stylesFile);
-    
-    for (const file of styleFiles) {
-      const fullPath = join(__dirname, 'styles', file);
-      fs.stat(fullPath, (err, stats) => {
-        if (err) {
+        try {
+
+          const files = await readdir(path);
+            
+          for (const file of files) {
+            fs.copyFile(`${join(assetsFolder, dir)}/${file}`, `${join(assetsFolderCopied, dir)}/${file}`, err => {
+              if (err) {
+                console.log(err);
+              }
+            });
+          }
+        } catch (err) {
           console.error(err);
-          return;
         }
-        if (stats.isFile() && file.split('.')[1] === 'css') {
-          const input = fs.createReadStream(fullPath, 'utf-8');
-          input.on('data', chunk => output.write(chunk));
-        }
-      });
+      })(join(assetsFolder, dir));
     }
   } catch (err) {
     console.error(err);
   }
-})(join(__dirname, 'styles'));
+})(assetsFolder);
